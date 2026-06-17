@@ -1,6 +1,17 @@
 const { CoreChecker } = require('./coreChecker');
 const { checkKeyword } = require('./keywordChecker');
 
+/**
+ * Processes a line of code and returns the corresponding JavaScript code.
+ * This function handles function definitions, immediate function expressions,
+ * function calls, and regular statements.
+ *
+ * @param {string} line - The line of code to be processed.
+ * @param {Object} currentFunction - The current function object.
+ * @param {string} currentFunction.name - The name of the current function.
+ * @param {Array} currentFunction.params - The parameters of the current function.
+ * @returns {string} - The corresponding JavaScript code.
+ */
 function processFunction(line, currentFunction) {
   // Check for Run keyword
   if (line.startsWith('Run')) {
@@ -15,6 +26,7 @@ function processFunction(line, currentFunction) {
       .split(',')
       .map((param) => param.trim())
       .join(', ');
+    // Return the IIFE code
     return `(function ${functionName || 'main'}(${params}) {\n`;
   }
 
@@ -24,6 +36,7 @@ function processFunction(line, currentFunction) {
     const [, functionName, params] = funcDefMatch;
     currentFunction.name = functionName;
     currentFunction.params = params.split(',').map((param) => param.trim());
+    // Return the function definition code
     return `function ${functionName}(${params}) {\n`;
   }
 
@@ -45,19 +58,33 @@ function processFunction(line, currentFunction) {
   // Check for Link keywords
   line = CoreChecker(line);
 
+  // Check for async function definition
   line = processAsyncFunction(line, currentFunction);
 
   // Check for regular statements
   return checkKeyword(line, currentFunction);
 }
 
+/**
+ * Processes a line of code and checks if it is a start of an async function.
+ * If it is, it returns the corresponding JavaScript code for the async function.
+ * If it is not, it returns the same line of code.
+ *
+ * @param {string} line - The line of code to be processed.
+ * @param {Object} currentFunction - The current function object.
+ * @param {string} currentFunction.name - The name of the current function.
+ * @param {Array} currentFunction.params - The parameters of the current function.
+ * @returns {string} - The corresponding JavaScript code or the same line of code.
+ */
 function processAsyncFunction(line, currentFunction) {
   // Check for function definition
   const funcDefMatch = line.match(/^Delay\s+(\w+)\s*\((.*)\)$/);
   if (funcDefMatch) {
+    // Extract function name and parameters from the line
     const [, functionName, params] = funcDefMatch;
     currentFunction.name = functionName;
     currentFunction.params = params.split(',').map((param) => param.trim());
+    // Return the JavaScript code for the async function
     return `async function ${functionName}(${params}) {\n`;
   }
 
@@ -65,12 +92,24 @@ function processAsyncFunction(line, currentFunction) {
   if (line.startsWith('End')) {
     currentFunction.name = '';
     currentFunction.params = [];
+    // Return the JavaScript code for the end of the async function
     return '}\n';
   }
 
+  // Return the same line of code if it is not a start of an async function
   return line;
 }
 
+/**
+ * Checks the code for "Use" statements and generates the corresponding import statements.
+ * Removes the "Use" statements from the code and prepends the generated import statements.
+ *
+ * @param {string} code - The code to be processed.
+ * @param {Object} config - The configuration object.
+ * @param {string} config.Mode - The mode of the configuration.
+ * @param {string|number} outputType - The type of output.
+ * @returns {string} - The processed code with import statements.
+ */
 function importChecker(code, config, outputType) {
   const lines = code.split('\n');
   let useStatements = []; // Array to store the types of "Use" statements found
@@ -82,9 +121,11 @@ function importChecker(code, config, outputType) {
 
   // Check for existing imports and keywords in the code
   for (const line of lines) {
+    // Check if the line starts with "Use "
     if (line.startsWith('Use ')) {
       // Extract the "Use" statement types and split by comma
       const modules = line.substring('Use '.length).trim().split(',');
+      // Map each module, trim it, and add it to the useStatements array
       useStatements = useStatements.concat(
         modules.map((module) => module.trim())
       );
@@ -94,8 +135,10 @@ function importChecker(code, config, outputType) {
   // Prepare the import statements based on the "Use" statements found
   let importStatements = '';
 
+  // If "ADS" is included in the useStatements
   if (useStatements.includes('ADS')) {
     importStatements +=
+      // Generate the import statement based on the configuration
       isProduction && !isRun
         ? `const ADS = require('alg-compiler/core/ADS/ADS');\n`
         : !isProduction && isRun
@@ -103,8 +146,10 @@ function importChecker(code, config, outputType) {
         : `const ADS = require('../../src/Compilers/js/Core/ADS/ADS');\n`;
   }
 
+  // If "Threads" is included in the useStatements
   if (useStatements.includes('Threads')) {
     importStatements +=
+      // Generate the import statement based on the configuration
       isProduction && !isRun
         ? `const Threads = require('alg-compiler/core/Process/Threads');\n`
         : !isProduction && isRun
@@ -112,8 +157,10 @@ function importChecker(code, config, outputType) {
         : `const Threads = require('../../src/Compilers/js/Core/Process/Threads');\n`;
   }
 
+  // If "Links" is included in the useStatements
   if (useStatements.includes('Links')) {
     importStatements +=
+      // Generate the import statement based on the configuration
       isProduction && !isRun
         ? `const Links = require('alg-compiler/core/State/Link');\n`
         : !isProduction && isRun

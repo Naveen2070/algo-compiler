@@ -1,113 +1,115 @@
-const { Worker } = require('worker_threads');
+const {
+  Worker,
+  isMainThread,
+  parentPort,
+  workerData,
+} = require('worker_threads');
 
-class Thread {
-  constructor(name) {
-    this.name = name;
-    this.worker = null;
-    this.paused = false;
-  }
+if (!isMainThread) {
+  const { taskString } = workerData;
 
-  run(task) {
-    return new Promise((resolve, reject) => {
-      if (typeof task === 'function') {
-        const taskString = task.toString();
-        const workerCode = `
-          const { parentPort } = require('worker_threads');
-          let paused = false;
-          parentPort.on('message', async (data) => {
-            const { taskString, action } = data;
-            if (action === 'pause') {
-              paused = true;
-            } else if (action === 'resume') {
-              paused = false;
-            } else if (action === 'execute') {
-              const task = eval('(' + taskString + ')');
-              try {
-                const result = await task();
-                parentPort.postMessage({ result });
-              } catch (error) {
-                parentPort.postMessage({ error: error.message });
-              }
+  const task = eval(`(${taskString})`);
+
+  Promise.resolve(task())
+    .then((result) => {
+      parentPort.postMessage({ result });
+    })
+    .catch((error) => {
+      parentPort.postMessage({ error: error.message });
+    });
+} else {
+  /**
+   * Class representing a thread.
+   */
+  class Thread {
+    /**
+     * Create a thread.
+     * @param {string} name - The name of the thread.
+     */
+    constructor(name) {
+      this.name = name;
+      this.worker = null;
+      this.paused = false;
+    }
+
+    /**
+     * Run a task in the thread.
+     * @param {function} task - The task to run.
+     * @return {Promise} A promise that resolves when the task is complete.
+     */
+    run(task) {
+      return new Promise((resolve, reject) => {
+        if (typeof task === 'function') {
+          const taskString = task.toString();
+          this.worker = new Worker(__filename, {
+            workerData: { taskString },
+          });
+
+          this.worker.on('message', ({ result, error }) => {
+            if (error) {
+              reject(new Error(error));
+            } else {
+              resolve(result);
             }
           });
-        `;
-        this.worker = new Worker(workerCode, { eval: true });
-        this.worker.on('message', ({ result, error }) => {
-          if (error) {
-            reject(new Error(error));
-          } else {
-            resolve(result);
-          }
-        });
-        this.worker.on('error', (error) => {
-          reject(new Error(`Error from thread ${this.name}: ${error.message}`));
-        });
-        this.worker.on('exit', (code) => {
-          if (code !== 0) {
-            reject(new Error(`Worker stopped with exit code ${code}`));
-          }
-        });
 
-        // Start executing the task
-        this.executeTask(taskString);
-      } else if (typeof task === 'string') {
-        this.worker = new Worker(task);
-        this.worker.on('message', ({ result, error }) => {
-          if (error) {
-            reject(new Error(error));
-          } else {
-            resolve(result);
-          }
-        });
-        this.worker.on('error', (error) => {
-          reject(new Error(`Error from thread ${this.name}: ${error.message}`));
-        });
-        this.worker.on('exit', (code) => {
-          if (code !== 0) {
-            reject(new Error(`Worker stopped with exit code ${code}`));
-          }
-        });
-      } else {
-        reject(new Error('Task should be a function or a file path.'));
-      }
-    });
-  }
+          this.worker.on('error', (error) => {
+            reject(
+              new Error(`Error from thread ${this.name}: ${error.message}`)
+            );
+          });
 
-  executeTask(taskString) {
-    this.worker.postMessage({ taskString, action: 'execute' });
-  }
+          this.worker.on('exit', (code) => {
+            if (code !== 0) {
+              reject(new Error(`Worker stopped with exit code ${code}`));
+            }
+          });
+        } else {
+          reject(new Error('Task should be a function.'));
+        }
+      });
+    }
 
-  pause() {
-    return new Promise((resolve, reject) => {
-      if (!this.worker) {
-        reject(new Error('Thread worker not initialized.'));
-        return;
-      }
-      if (this.paused) {
+    /**
+     * Pause the thread.
+     * @return {Promise} A promise that resolves when the thread is paused.
+     */
+    pause() {
+      return new Promise((resolve, reject) => {
+        if (!this.worker) {
+          reject(new Error('Thread worker not initialized.'));
+          return;
+        }
+        if (this.paused) {
+          resolve();
+          return;
+        }
+        this.worker.postMessage({ action: 'pause' });
+        this.paused = true;
         resolve();
-        return;
-      }
-      this.worker.postMessage({ action: 'pause' });
-      this.paused = true;
-      resolve();
-    });
+      });
+    }
+
+    /**
+     * Resume the thread.
+     * @return {Promise} A promise that resolves when the thread is resumed.
+     */
+    resume() {
+      return new Promise((resolve, reject) => {
+        if (!this.worker) {
+          reject(new Error('Thread worker not initialized.'));
+          return;
+        }
+        if (!this.paused) {
+          resolve();
+          return;
+        }
+        this.worker.postMessage({ action: 'resume' });
+        this.paused = false;
+        resolve();
+      });
+    }
   }
 
-  resume() {
-    return new Promise((resolve, reject) => {
-      if (!this.worker) {
-        reject(new Error('Thread worker not initialized.'));
-        return;
-      }
-      if (!this.paused) {
-        resolve();
-        return;
-      }
-      this.worker.postMessage({ action: 'resume' });
-      this.paused = false;
-      resolve();
-    });
-  }
+  module.exports = Thread;
 }
-
-module.exports = Thread;

@@ -1,3 +1,9 @@
+/**
+ * Fixes the indentation of Python code.
+ *
+ * @param {string} pyCode - The Python code with incorrect indentation.
+ * @return {string} The Python code with corrected indentation.
+ */
 function fixIndentation(pyCode) {
   // Split the code into lines
   const lines = pyCode.split('\n');
@@ -6,18 +12,18 @@ function fixIndentation(pyCode) {
 
   // Define the characters that increase or decrease the indentation level
   const increaseIndentChars = [
-    'def',
-    'for',
-    'while',
-    'if',
-    'elif',
-    'else:',
-    'class',
+    'def', // Function definition
+    'for', // For loop
+    'while', // While loop
+    'if', // If statement
+    'elif', // Elif statement
+    'else:', // Else statement
+    'class', // Class definition
   ];
-  const decreaseIndentChars = ['return', 'break', 'continue'];
+  const decreaseIndentChars = ['return', 'break', 'continue']; // Statements that decrease indentation
 
   // Define characters that indicate compound statements that increase indentation
-  const compoundStatementChars = [':'];
+  const compoundStatementChars = [':']; // Colon indicates compound statement
 
   // Initialize the indentation level
   let currentIndentation = 0;
@@ -42,7 +48,8 @@ function fixIndentation(pyCode) {
       currentIndentation++;
     }
 
-    // Increase indentation if next line starts with an increaseIndentChar and is not followed by a decreaseIndentChar
+    // Increase indentation if next line starts with an increaseIndentChar
+    // and is not followed by a decreaseIndentChar
     const nextLineIndex = lines.indexOf(line) + 1;
     if (nextLineIndex < lines.length) {
       const nextLine = lines[nextLineIndex].trim();
